@@ -12,8 +12,9 @@ By **Akahon Audio LLC** · composerrob.com
 ## Using the app
 
 Drag `BG Spotter.app` to your Applications folder and launch it.
-(First launch of an unsigned build: right-click → **Open** → **Open**, because
-Gatekeeper warns about apps not downloaded from the App Store.)
+(First launch of an unsigned build: on macOS 15+, double-click once, then
+**System Settings → Privacy & Security → Open Anyway**; on macOS 14 or
+earlier, right-click → **Open**. One time only — see *Sharing* below.)
 
 1. Drop a video (`.mov`, `.mp4`, `.mxf`) or press **Browse…**
 2. Tick any combination of overlap sizes — each adds an A/B track pair
@@ -47,9 +48,20 @@ BGSPOTTER_SELFTEST=/path/to/video.mov BGSPOTTER_SELFTEST_OUT=/tmp/t.aaf \
 
 ## Sharing with collaborators
 
-`dist/BG Spotter.app` is ad-hoc signed: it runs on any Mac, but recipients
-must right-click → Open the first time (macOS quarantine). For frictionless
-distribution, sign + notarize with an Apple Developer ID:
+`dist/BG Spotter.app` (and `BG-Spotter-2.0.0.dmg`) are ad-hoc signed — no
+Apple Developer ID, so they can't be notarized. They run fine on any Mac, but
+macOS Gatekeeper blocks the first launch:
+
+- **macOS 14 and earlier:** right-click the app → **Open** → **Open**.
+- **macOS 15 (Sequoia) or later:** double-click it once (it will refuse), then
+  open **System Settings → Privacy & Security**, scroll to the Security
+  section, click **Open Anyway**, and confirm. One time only per machine.
+
+If you zip/dropbox the app, macOS tags it as quarantined — that's what
+triggers the prompt. Copying it locally (e.g. from a USB drive formatted
+Mac OS Extended) skips the prompt entirely.
+
+For frictionless distribution later, an Apple Developer ID ($99/yr) enables:
 
 ```
 codesign --force --deep -s "Developer ID Application: Your Name (TEAMID)" "BG Spotter.app"
