@@ -1,12 +1,7 @@
-*.mp4
-*.mov
-*.mkv
-__pycache__/
-*.pyc
-.pytest_cache/
-.DS_Store
-*.egg-info/
+.venv/
 build/
 dist/
-.venv/
-venv/
+tmp/
+__pycache__/
+*.egg-info/
+.pytest_cache/

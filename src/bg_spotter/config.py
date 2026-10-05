@@ -6,6 +6,11 @@ CHANNELS = 2
 
 SUPPORTED_VIDEO_EXTS = {".mov", ".mxf", ".mp4"}
 
+# Overlap sizes (frames) offered in the UI. Each selected size produces
+# two tracks: "Spots - N Frame Overlap A" / "... B".
+OVERLAP_CHOICES = [1, 2, 3, 4, 5, 6]
+DEFAULT_OVERLAPS = [2]
+
 # Maps fps label → (numerator, denominator) for the actual frame rate
 FPS_RATES: dict[str, tuple[int, int]] = {
     "15":     (15, 1),
@@ -31,18 +36,6 @@ FPS_NOMINAL: dict[str, int] = {
 # Cut detection
 CONTENT_DETECTOR_THRESHOLD = 27.0  # PySceneDetect default
 
-# YOLO walking heuristic — normalised to frame dimensions
-ANKLE_VAR_THRESHOLD = 0.0003       # variance of normalised ankle-y over 1-sec window
-HIP_DISPLACEMENT_THRESHOLD = 0.02  # |hip_x_end - hip_x_start| as fraction of width
-ANKLE_CORR_THRESHOLD = -0.2        # max cross-correlation to be considered alternating
-WALKING_WINDOW_SEC = 1.0
-MIN_WALKING_DURATION_SEC = 0.5
-
-MODELS_DIR = Path(__file__).parent.parent.parent.parent / "models"
-YOLO_MODEL_ID = "yolo11n-pose.pt"
-
-OLLAMA_BASE_URL = "http://localhost:11434"
-VLM_PROMPT = (
-    "How many people in this image are currently walking? "
-    "Reply with a single integer only."
-)
+APP_NAME = "BG Spotter"
+COMPANY_NAME = "Akahon Audio LLC"
+WEBSITE = "https://www.composerrob.com"

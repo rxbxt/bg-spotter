@@ -4,19 +4,17 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bg-spotter"
-version = "0.1.0"
-description = "AI-driven AAF guide-track generator for post-production sound"
+version = "2.0.0"
+description = "Edit-point AAF guide-track generator for post-production sound (Akahon Audio)"
 requires-python = ">=3.11"
 dependencies = [
     "pyaaf2",
-    "scenedetect[opencv]",
-    "ultralytics",
+    "scenedetect",
     "PySide6",
-    "ollama",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-qt"]
+dev = ["pytest", "pytest-qt", "pyinstaller"]
 
 [project.scripts]
 bg-spotter = "bg_spotter.__main__:main"

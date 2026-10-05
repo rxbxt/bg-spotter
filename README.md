@@ -1,36 +1,71 @@
-# BG Spotter
+# BG Spotter 2.0
 
-AI-driven AAF guide-track generator for post-production sound. Ingests a picture-locked film and outputs an AAF containing guide tracks (Backgrounds and Footsteps) for sound effects work.
+Edit-point AAF guide-track generator for post-production sound.
+Feed it a picture-locked video, pick one or more overlap sizes (1–6 frames),
+and it exports an AAF with spotted-out guide tracks: for each selected size N,
+a track pair **"Spots - N Frame Overlap A" / "... B"** whose clips alternate and
+overlap by exactly N frames at every hard cut. Silence regions between clips
+import into Pro Tools as true digital silence — no cleanup needed.
 
-## Setup on a new machine
+By **Akahon Audio LLC** · composerrob.com
 
-1. **SSH access**: generate/add an SSH key for the new machine to GitHub, then clone:
-   ```
-   git clone git@github.com:rxbxt/bg-spotter.git
-   ```
+## Using the app
 
-2. **Python 3.11+**, then from the repo root:
-   ```
-   pip install -e ".[dev]"
-   ```
-   This installs pyaaf2, scenedetect, ultralytics, PySide6, the ollama client, and pytest.
+Drag `BG Spotter.app` to your Applications folder and launch it.
+(First launch of an unsigned build: right-click → **Open** → **Open**, because
+Gatekeeper warns about apps not downloaded from the App Store.)
 
-3. **YOLO model**: `yolo11n-pose.pt` is committed to the repo, so nothing extra needed.
+1. Drop a video (`.mov`, `.mp4`, `.mxf`) or press **Browse…**
+2. Tick any combination of overlap sizes — each adds an A/B track pair
+3. Frame rate / start timecode auto-fill from the file; override if needed
+4. Press **Spot & Export AAF**
 
-4. **Ollama**: install the Ollama app/CLI separately (it's not a pip package) and make sure it's running on `localhost:11434` (configured in `src/bg_spotter/config.py`).
+Import the resulting `.aaf` into Pro Tools: the guide tracks land on the
+picture timeline with the same start timecode as the source.
 
-5. **VLM model**: the GUI's "VLM model" dropdown lists whatever vision-capable models are installed via `ollama list`. If you use the VLM walker-counting step, `ollama pull` a vision model (e.g. `llava` or `qwen2.5vl`).
+No ffmpeg or Python install required — everything is bundled. (If `ffprobe`
+happens to be installed, it's used for richer metadata; otherwise a built-in
+OpenCV probe takes over.)
 
-6. **Test video**: source video files are not committed to the repo (too large for GitHub). Copy any test footage over separately.
+## Building from source
 
-## Running
+Requires Python 3.11+ and macOS (Apple Silicon or Intel):
 
 ```
-bg-spotter
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+./build_app.sh          # → dist/BG Spotter.app
+pytest                  # 71 tests
 ```
 
-## Tests
+The built app can be smoke-tested headlessly:
 
 ```
-pytest
+BGSPOTTER_SELFTEST=/path/to/video.mov BGSPOTTER_SELFTEST_OUT=/tmp/t.aaf \
+  "./dist/BG Spotter.app/Contents/MacOS/BG Spotter"
 ```
+
+## Sharing with collaborators
+
+`dist/BG Spotter.app` is ad-hoc signed: it runs on any Mac, but recipients
+must right-click → Open the first time (macOS quarantine). For frictionless
+distribution, sign + notarize with an Apple Developer ID:
+
+```
+codesign --force --deep -s "Developer ID Application: Your Name (TEAMID)" "BG Spotter.app"
+xcrun notarytool submit BG Spotter.zip --apple-id you@example.com --password <app-pw> --team-id TEAMID --staple
+```
+
+## What changed in 2.0
+
+- **Multi-overlap export**: 1–6 frame sizes, any combination; track names
+  `Spots - N Frame Overlap A/B`. Overlap is centred on each cut (odd N splits
+  the half-frame at sample accuracy). Dissolves span their full transition.
+- **Footsteps feature removed** (with YOLO/Ollama dependencies).
+- **Silence fix**: the silent master is now embedded through pyaaf2's
+  canonical `import_audio_essence()` path with a proper SourceClip file-mob
+  structure. The old hand-rolled Filler-based file mob made Pro Tools decode
+  garbage into every clip (the "loud glitch" you fixed with −96 dB gain).
+- **New single-window UI** (red/black), drag-and-drop, live track preview,
+  auto-named output, progress reporting.
+- **Packaged as a standalone .app** — no Python needed on target machines.

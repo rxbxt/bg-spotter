@@ -19,6 +19,59 @@ class VideoMeta:
 
 
 def probe_video(path: str) -> VideoMeta:
+    """Return a VideoMeta for the given video file.
+
+    Uses ffprobe when available (best metadata, incl. embedded timecode);
+    falls back to OpenCV — which ships with the app — so the application
+    works on machines without ffmpeg installed.
+    """
+    try:
+        return _probe_ffprobe(path)
+    except Exception:
+        return _probe_opencv(path)
+
+
+def _probe_opencv(path: str) -> VideoMeta:
+    """OpenCV fallback probe: fps + frame count, default 01:00:00:00 start."""
+    import cv2
+
+    cap = cv2.VideoCapture(path)
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open video file: {path}")
+    try:
+        fps_num = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    finally:
+        cap.release()
+
+    if fps_num <= 0 or frame_count <= 0:
+        raise RuntimeError(f"Could not read video metadata from: {path}")
+
+    # Snap to the nearest supported rate (handles 23.976/29.97 float drift)
+    best_label, best_err = "24", float("inf")
+    for label, (n, d) in FPS_RATES.items():
+        err = abs(n / d - fps_num)
+        if err < best_err:
+            best_label, best_err = label, err
+    fps_string = best_label
+    fps_rational = FPS_RATES[fps_string]
+    drop_frame = False  # undetectable without container TC metadata
+
+    from bg_spotter.pipeline.timing import frames_to_samples
+    total_samples = frames_to_samples(frame_count, fps_string, drop_frame)
+    sep = ":"
+    return VideoMeta(
+        path=path,
+        fps_string=fps_string,
+        fps_rational=fps_rational,
+        drop_frame=drop_frame,
+        start_tc=f"01:00:00{sep}00",
+        duration_frames=frame_count,
+        total_samples=total_samples,
+    )
+
+
+def _probe_ffprobe(path: str) -> VideoMeta:
     """Run ffprobe and return a VideoMeta for the given video file."""
     cmd = [
         "ffprobe",
