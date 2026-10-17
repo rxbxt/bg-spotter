@@ -14,7 +14,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from bg_spotter.config import (
@@ -55,7 +55,9 @@ QFrame#card {{ background: {SURFACE}; border: 1px solid {BORDER};
 QLabel#cardtitle {{ color: {MUTED}; font-size: 11px; letter-spacing: 1.5px;
     font-weight: 600; }}
 QLineEdit, QSpinBox, QComboBox {{ background: {SURFACE_2}; border: 1px solid {BORDER};
-    border-radius: 6px; padding: 6px 8px; color: {TEXT}; selection-background-color: {RED}; }}
+    border-radius: 6px; padding: 6px 8px; color: {TEXT}; selection-background-color: {RED};
+    min-height: 18px; }}
+QScrollArea {{ border: none; background: transparent; }}
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {RED}; }}
 QPushButton#secondary {{ background: {SURFACE_2}; color: {TEXT};
     border: 1px solid {BORDER}; border-radius: 6px; padding: 6px 14px; }}
@@ -76,6 +78,50 @@ QFrame#dropzone {{ background: {SURFACE}; border: 2px dashed {BORDER};
     border-radius: 10px; }}
 QFrame#dropzone[dragOver="true"] {{ border-color: {RED}; }}
 """
+
+
+def _log_file_path() -> str:
+    base = os.path.expanduser("~/Library/Logs/BG Spotter")
+    try:
+        os.makedirs(base, exist_ok=True)
+    except OSError:
+        base = os.path.expanduser("~")
+    return os.path.join(base, "bgspotter.log")
+
+
+def _log_exception(context: str) -> None:
+    """Append the active traceback to a real file.
+
+    Launched from Finder, stdout/stderr go to /dev/null, so an uncaught error is
+    invisible and the app merely looks frozen - which is exactly how the
+    insertWidget crash presented. Keep a trail on disk instead.
+    """
+    import time
+    import traceback
+    try:
+        with open(_log_file_path(), "a", encoding="utf-8") as fh:
+            fh.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} {context} ===\n")
+            traceback.print_exc(file=fh)
+    except OSError:
+        pass
+
+
+def install_crash_log() -> None:
+    """Route uncaught exceptions to the log file as well as stderr."""
+    import sys
+    import time
+    import traceback
+
+    def hook(etype, value, tb):
+        try:
+            with open(_log_file_path(), "a", encoding="utf-8") as fh:
+                fh.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} uncaught ===\n")
+                traceback.print_exception(etype, value, tb, file=fh)
+        except OSError:
+            pass
+        traceback.print_exception(etype, value, tb)
+
+    sys.excepthook = hook
 
 
 class _Worker(QThread):
@@ -117,9 +163,14 @@ class MainWindow(QMainWindow):
 
     # ---------------------------------------------------------------- UI --
     def _build_ui(self) -> None:
-        central = QWidget()
-        self.setCentralWidget(central)
-        root = QVBoxLayout(central)
+        content = QWidget()
+        root = QVBoxLayout(content)
+        # Keep a handle on the content layout.  QMainWindow.layout() returns a
+        # QMainWindowLayout, which PySide6 does not expose insertWidget /
+        # insertLayout on - using it crashed _on_go before the worker ever
+        # started, leaving the button stuck on "Working…" with nothing running.
+        self._root = root
+        self._content = content
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(16)
 
@@ -234,11 +285,22 @@ class MainWindow(QMainWindow):
         # ---- Progress / result ------------------------------------------
         self._bar = None
         self._cancel_btn = None
+        self._reveal_btn = None
         self._status = QLabel(" ")
         self._status.setObjectName("status")
         self._status.setWordWrap(True)
         root.addWidget(self._status)
         root.addStretch()
+
+        # Scroll rather than squeeze.  Without this, every row added at runtime
+        # (progress bar, Reveal in Finder) competes for a fixed window height and
+        # Qt shrinks the line edits below their size hint until the text clips.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
+        self.setCentralWidget(scroll)
 
         self._refresh_tracks_preview()
         for cb in self._overlap_checks.values():
@@ -366,12 +428,19 @@ class MainWindow(QMainWindow):
 
         self._go_btn.setEnabled(False)
         self._go_btn.setText("Working…")
-        if self._bar is None:
-            self._bar = QProgressBar()
-            self._bar.setRange(0, 100)
-            self.layout().insertWidget(self.layout().indexOf(self._status), self._bar)
-        self._bar.show()
-        self._bar.setValue(0)
+        try:
+            if self._bar is None:
+                self._bar = QProgressBar()
+                self._bar.setRange(0, 100)
+                self._root.insertWidget(self._root.indexOf(self._status), self._bar)
+            self._bar.show()
+            self._bar.setValue(0)
+        except Exception as exc:      # never leave the button stuck on "Working…"
+            self._reset_action()
+            self._status.setStyleSheet(f"color: {RED};")
+            self._status.setText(f"✗  Failed to start: {exc}")
+            _log_exception("progress bar setup")
+            return
         self._status.setText("Starting…")
         self._status.setStyleSheet("")
 
@@ -379,7 +448,13 @@ class MainWindow(QMainWindow):
         self._worker.progress.connect(self._on_progress)
         self._worker.completed.connect(self._on_done)
         self._worker.failed.connect(self._on_failed)
-        self._worker.start()
+        try:
+            self._worker.start()
+        except Exception as exc:
+            self._reset_action()
+            self._status.setStyleSheet(f"color: {RED};")
+            self._status.setText(f"✗  Failed to start worker: {exc}")
+            _log_exception("worker start")
 
     def _on_progress(self, label: str, pct: int) -> None:
         if self._bar is not None:
@@ -405,14 +480,28 @@ class MainWindow(QMainWindow):
         self._status.setText(f"✗  Failed: {message}")
 
     def _reveal_button(self, path: str) -> None:
-        btn = QPushButton("Reveal in Finder")
-        btn.setObjectName("secondary")
-        btn.clicked.connect(lambda: subprocess.Popen(
-            ["open", "-R", os.path.abspath(path)]))
-        row = QHBoxLayout()
-        row.addWidget(btn)
-        row.addStretch()
-        self.layout().insertLayout(self.layout().indexOf(self._status) + 1, row)
+        """Create the row once, then only retarget it.
+
+        Inserting a fresh row on every success stacked up over repeated runs and
+        squeezed the rest of the window until fields collapsed.
+        """
+        if self._reveal_btn is None:
+            btn = QPushButton("Reveal in Finder")
+            btn.setObjectName("secondary")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(self._reveal_in_finder)
+            row = QHBoxLayout()
+            row.addWidget(btn)
+            row.addStretch()
+            self._root.insertLayout(self._root.indexOf(self._status) + 1, row)
+            self._reveal_btn = btn
+        self._reveal_path = path
+        self._reveal_btn.show()
+
+    def _reveal_in_finder(self) -> None:
+        path = getattr(self, "_reveal_path", "")
+        if path and os.path.exists(path):
+            subprocess.Popen(["open", "-R", os.path.abspath(path)])
 
     def _reset_action(self) -> None:
         self._go_btn.setEnabled(True)
@@ -430,6 +519,7 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     import sys
+    install_crash_log()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(COMPANY_NAME)

@@ -17,11 +17,15 @@ PY=.venv/bin/python
   src/bg_spotter/__main__.py
 
 # Stamp human-readable metadata into the bundle's Info.plist
+# 2.0.1 = mono embedded master (Pro Tools multichannel fix), unique media names,
+# working GUI export path.  Keep this ahead of whatever dist/*.dmg already holds:
+# a stale build carrying the same version number shipped broken once before.
+APP_VERSION="2.0.1"
 PLIST="dist/BG Spotter.app/Contents/Info.plist"
 plutil -replace CFBundleName        -string "BG Spotter"            "$PLIST"
 plutil -replace CFBundleDisplayName -string "BG Spotter"            "$PLIST"
-plutil -replace CFBundleShortVersionString -string "2.0.0"          "$PLIST"
-plutil -replace CFBundleVersion     -string "2.0.0"                 "$PLIST"
+plutil -replace CFBundleShortVersionString -string "$APP_VERSION"   "$PLIST"
+plutil -replace CFBundleVersion     -string "$APP_VERSION"          "$PLIST"
 plutil -replace NSHighResolutionCapable -bool true                  "$PLIST"
 
 # Re-sign ad-hoc after plist edits so the bundle stays launchable

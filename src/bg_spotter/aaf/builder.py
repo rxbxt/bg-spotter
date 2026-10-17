@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import time
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -29,7 +30,7 @@ import aaf2
 from aaf2.rational import AAFRational
 
 from bg_spotter.aaf.silence import generate_silent_wav
-from bg_spotter.config import SAMPLE_RATE, BIT_DEPTH, CHANNELS
+from bg_spotter.config import SAMPLE_RATE, BIT_DEPTH, MASTER_CHANNELS
 from bg_spotter.pipeline.cut_detect import Edit
 from bg_spotter.pipeline.timing import frames_to_samples
 from bg_spotter.pipeline.video_meta import VideoMeta
@@ -166,6 +167,7 @@ def write_aaf(
     meta: VideoMeta,
     edits: list[Edit],
     overlap_selections: list[int],
+    media_name: str | None = None,
 ) -> None:
     """Write the guide-track AAF to *output_path*.
 
@@ -204,14 +206,21 @@ def write_aaf(
             wf.write(generate_silent_wav(
                 total_samples,
                 sample_rate=SAMPLE_RATE,
-                channels=CHANNELS,
+                channels=MASTER_CHANNELS,
                 bit_depth=BIT_DEPTH,
             ))
+
+        # Unique per export.  Pro Tools names and attaches imported media by this
+        # string, so a fixed name across exports invites it to reuse stale media
+        # from an earlier import.  Every silent-sounding test in this project had
+        # a unique master name; every ticking one used the old fixed string.
+        if not media_name:
+            media_name = f"BG Spotter Silence {time.strftime('%y%m%d-%H%M%S')}"
 
         with aaf2.open(output_path, "w") as f:
 
             source_mob = f.create.SourceMob()
-            source_mob.name = "BG Spotter Silence"
+            source_mob.name = media_name
             f.content.mobs.append(source_mob)
             source_mob.import_audio_essence(wav_path, edit_rate=audio_rate)
 
@@ -219,7 +228,7 @@ def write_aaf(
             # 2. MasterMob — required intermediary for Pro Tools AAF import
             # --------------------------------------------------------------
             master_mob = f.create.MasterMob()
-            master_mob.name = "BG Spotter Silence"
+            master_mob.name = media_name
             f.content.mobs.append(master_mob)
 
             master_slot = master_mob.create_timeline_slot(edit_rate=audio_rate, slot_id=1)

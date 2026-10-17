@@ -4,6 +4,14 @@ SAMPLE_RATE = 48000
 BIT_DEPTH = 24
 CHANNELS = 2
 
+# Channels of the embedded guide-track master.  MUST be 1: Pro Tools logs
+# "Audio file … is multi-channel. Only the first channel will be referenced by
+# Pro Tools." for interleaved stereo essence and leaves the imported regions
+# filled with its own uninitialised memory instead of the embedded samples
+# (the audible ticking).  Guide tracks are mono markers, so mono is also the
+# correct format — and it halves the embedded payload on long reels.
+MASTER_CHANNELS = 1
+
 SUPPORTED_VIDEO_EXTS = {".mov", ".mxf", ".mp4"}
 
 # Overlap sizes (frames) offered in the UI. Each selected size produces

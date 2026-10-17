@@ -10,6 +10,7 @@ from bg_spotter.aaf.builder import (
     track_name,
     write_aaf,
 )
+from bg_spotter.config import MASTER_CHANNELS
 from bg_spotter.pipeline.cut_detect import Edit
 from bg_spotter.pipeline.timing import frames_to_samples
 from bg_spotter.pipeline.video_meta import VideoMeta
@@ -201,8 +202,26 @@ class TestWriteAaf:
                         data_streams.append(ole.openstream(e).read())
             assert len(data_streams) == 1
             payload = data_streams[0]
-            assert len(payload) == TOTAL_SAMPLES * 2 * 3  # stereo 24-bit
+            assert len(payload) == TOTAL_SAMPLES * MASTER_CHANNELS * 3
             assert not any(payload), "essence must contain only zero bytes"
+
+    def test_master_is_mono_not_multichannel(self):
+        """Regression: Pro Tools logs 'Audio file … is multi-channel. Only the
+        first channel will be referenced by Pro Tools.' for interleaved stereo
+        essence and imports the regions as uninitialised memory (the ticking).
+        The embedded master must therefore be single-channel."""
+        import aaf2
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, "mono.aaf")
+            write_aaf(out, _meta(), [], overlap_selections=[2])
+            with aaf2.open(out, "r") as f:
+                src = [m for m in f.content.mobs
+                       if type(m).__name__ == "SourceMob"][0]
+                d = src.descriptor
+                assert d["Channels"].value == 1, (
+                    "embedded master must be mono or Pro Tools references only "
+                    "its first channel and leaves the regions unfilled")
+                assert d["BlockAlign"].value == 3
 
     def test_source_mob_slot_is_sourceclip_not_filler(self):
         """Regression: the old builder put a Filler in the file-mob slot;
