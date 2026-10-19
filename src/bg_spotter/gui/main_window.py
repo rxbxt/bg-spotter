@@ -226,10 +226,17 @@ class MainWindow(QMainWindow):
         grid.setHorizontalSpacing(18)
         grid.setVerticalSpacing(8)
         self._overlap_checks: dict[int, QCheckBox] = {}
-        for i, n in enumerate(OVERLAP_CHOICES):
+        # 0 is a different kind of spot, so it stands alone on the left. The six
+        # handle sizes form a 3×2 block to its right — 4 under 1, 5 under 2,
+        # 6 under 3 — which reads in the same order as the track list.
+        self._overlap_grid = grid
+        for n in OVERLAP_CHOICES:
             cb = QCheckBox(overlap_label(n))
             cb.setChecked(n in DEFAULT_OVERLAPS)
-            grid.addWidget(cb, i // 4, i % 4)
+            if n == 0:
+                grid.addWidget(cb, 0, 0, 2, 1, Qt.AlignLeft | Qt.AlignVCenter)
+            else:
+                grid.addWidget(cb, (n - 1) // 3, (n - 1) % 3 + 1)
             self._overlap_checks[n] = cb
         grid.setColumnStretch(4, 1)
         card_overlaps.layout().addLayout(grid)
@@ -299,11 +306,38 @@ class MainWindow(QMainWindow):
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(content)
+        self._scroll = scroll
         self.setCentralWidget(scroll)
 
         self._refresh_tracks_preview()
         for cb in self._overlap_checks.values():
             cb.toggled.connect(self._refresh_tracks_preview)
+
+        self._fit_window_to_content()
+
+    def _fit_window_to_content(self) -> None:
+        """Open tall enough that the whole form is visible — output box included.
+
+        A QScrollArea reports a small size hint of its own, so the window used to
+        open at its minimum and tuck the bottom rows behind a scrollbar. Scrolling
+        stays available on purpose: short screens, plus the progress bar and Reveal
+        row that appear during an export, still need somewhere to go without
+        squeezing the line edits below their size hint.
+        """
+        needed = self._content.layout().sizeHint()
+        if needed.width() <= 0 or needed.height() <= 0:
+            return                      # nothing laid out yet
+
+        width = max(self.minimumWidth(), needed.width() + 20)   # vertical scrollbar gutter
+        height = max(self.minimumHeight(), needed.height())
+
+        screen = QApplication.primaryScreen() if QApplication.instance() else None
+        if screen is not None:
+            # Keep the title bar clear of the menu bar so the bottom edge stays reachable.
+            height = min(height, screen.availableGeometry().height() - 60)
+            width = min(width, screen.availableGeometry().width() - 40)
+
+        self.resize(width, height)
 
     def _card(self, title: str) -> QFrame:
         card = QFrame()

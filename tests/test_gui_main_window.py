@@ -156,6 +156,47 @@ def test_zero_frame_option_offered_with_explanatory_label(qapp):
     assert len({id(cb) for cb in widgets}) == len(widgets)
 
 
+def test_overlap_grid_groups_columns(qapp):
+    """0 stands alone at the left; 4/5/6 sit directly beneath 1/2/3."""
+    w = MainWindow()
+    w.show()
+    qapp.processEvents()
+
+    zero = w._overlap_checks[0]
+    for n in (1, 2, 3, 4, 5, 6):
+        assert zero.x() < w._overlap_checks[n].x(), "0 frames must stay leftmost"
+
+    for upper, lower in ((1, 4), (2, 5), (3, 6)):
+        top = w._overlap_checks[upper]
+        bottom = w._overlap_checks[lower]
+        assert abs(top.x() - bottom.x()) <= 1, (
+            f"{lower} frames is not under {upper} frames "
+            f"(x={bottom.x()} vs x={top.x()})")
+        assert bottom.y() > top.y(), f"{lower} frames must sit below {upper}"
+
+    # The two handle rows must not overlap vertically.
+    assert w._overlap_checks[4].y() >= w._overlap_checks[1].y() + w._overlap_checks[1].height()
+
+
+def test_window_opens_showing_the_whole_form(qapp):
+    """No scrolling on open — the output box is visible at first launch."""
+    from PySide6.QtWidgets import QApplication
+
+    w = MainWindow()
+    w.show()
+    qapp.processEvents()
+
+    needed = w._content.sizeHint().height()
+    screen = QApplication.primaryScreen().availableGeometry().height()
+    if screen - 60 < needed:
+        pytest.skip(f"display is only {screen}px tall; cannot assert a scroll-free open")
+
+    assert w.height() >= needed, (
+        f"window opens at {w.height()}px but the form needs {needed}px")
+    assert w._scroll.viewport().height() >= needed
+    assert w._scroll.verticalScrollBar().maximum() == 0, "content still scrolls on open"
+
+
 def test_zero_frame_export_runs_end_to_end(qapp, tiny_video, tmp_path):
     """The GUI must honour a 0-frame selection, not silently fall back.
 
