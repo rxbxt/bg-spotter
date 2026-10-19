@@ -4,14 +4,17 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="dist/BG Spotter.app"
+APP="${DIST:-dist}/BG Spotter.app"
 if [ ! -d "$APP" ]; then
-  echo "No app bundle found. Run ./build_app.sh first." >&2
+  echo "No app bundle found at $APP. Run ./build_app.sh first." >&2
   exit 1
 fi
 
 VERSION=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
-DMG="dist/BG-Spotter-${VERSION}.dmg"
+# Tag the image with the architecture it actually contains, so an Intel build can
+# never be mailed out as if it were Apple Silicon (or vice versa).
+ARCHS="$(lipo -archs "$APP/Contents/MacOS/BG Spotter" 2>/dev/null | tr ' ' '-' || echo unknown)"
+DMG="${DIST:-dist}/BG-Spotter-${VERSION}-${ARCHS}${DMG_SUFFIX:+$DMG_SUFFIX}.dmg"
 STAGE="$(mktemp -d)/BG Spotter ${VERSION}"
 
 mkdir -p "$STAGE"

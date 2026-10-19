@@ -4,6 +4,8 @@ All public functions operate with 48 kHz sample counts as the canonical unit.
 Drop-frame timecode follows the SMPTE 12M-1-2008 standard (2 frames dropped
 per minute, except every 10th minute) for 29.97 fps material.
 """
+from __future__ import annotations
+
 from fractions import Fraction
 
 from bg_spotter.config import FPS_RATES, FPS_NOMINAL, SAMPLE_RATE

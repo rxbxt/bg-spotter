@@ -241,3 +241,47 @@ class TestWriteAaf:
             out = os.path.join(td, "bad.aaf")
             with pytest.raises(ValueError):
                 write_aaf(out, _meta(), [], overlap_selections=[])
+
+
+def test_zero_overlap_clips_meet_exactly_at_the_cut():
+    """0 frames means 'edit points only': no handle on either side of a cut."""
+    cut_frame = 120
+    edits = [Edit(start_frame=cut_frame, end_frame=cut_frame, kind="hard")]
+    a, b = _build_bg_regions(edits, TOTAL_SAMPLES, overlap_frames=0,
+                             fps_string=FPS, drop_frame=DF)
+    cut_sample = frames_to_samples(cut_frame, FPS, DF)
+    clip_a = [r for r in a if not r.is_gap][0]
+    clip_b = [r for r in b if not r.is_gap][0]
+    assert clip_a.end == cut_sample
+    assert clip_b.start == cut_sample
+
+
+def test_zero_overlap_tiles_timeline_without_gaps_or_overlaps():
+    """With no handles, A and B together tile the reel exactly."""
+    edits = [Edit(start_frame=f, end_frame=f, kind="hard") for f in (60, 120, 180)]
+    a, b = _build_bg_regions(edits, TOTAL_SAMPLES, overlap_frames=0,
+                             fps_string=FPS, drop_frame=DF)
+    spans = sorted((r.start, r.end) for r in a + b if not r.is_gap)
+    covered = 0
+    for start, end in spans:
+        assert start == covered, f"gap or overlap before sample {start}"
+        covered = end
+    assert covered == TOTAL_SAMPLES
+
+
+def test_zero_overlap_track_labels_read_as_edit_points():
+    assert track_name(0, "A") == "Edit Points Only A"
+    assert track_name(0, "B") == "Edit Points Only B"
+    # Other sizes keep the established wording.
+    assert track_name(2, "A") == "Spots - 2 Frame Overlap A"
+
+
+def test_zero_is_an_offered_choice_with_its_own_wording():
+    from bg_spotter.config import OVERLAP_CHOICES, overlap_label
+
+    assert 0 in OVERLAP_CHOICES
+    label = overlap_label(0)
+    assert "0 frames" in label
+    assert "edit point" in label.lower()
+    assert overlap_label(1) == "1 frame"
+    assert overlap_label(3) == "3 frames"

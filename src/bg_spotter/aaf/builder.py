@@ -119,6 +119,10 @@ def _build_bg_regions(
 
 def track_name(overlap_frames: int, ab: str) -> str:
     """Canonical Pro Tools track label for one spotted track."""
+    if overlap_frames == 0:
+        # No handles at all: clips meet exactly at each edit point, so "overlap"
+        # would be a misleading word on the track.
+        return f"Edit Points Only {ab}"
     return f"Spots - {overlap_frames} Frame Overlap {ab}"
 
 

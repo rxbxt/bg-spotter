@@ -16,8 +16,17 @@ SUPPORTED_VIDEO_EXTS = {".mov", ".mxf", ".mp4"}
 
 # Overlap sizes (frames) offered in the UI. Each selected size produces
 # two tracks: "Spots - N Frame Overlap A" / "... B".
-OVERLAP_CHOICES = [1, 2, 3, 4, 5, 6]
+# 0 is a different kind of spot — clips meet exactly at each edit with no handle
+# overlap — so it gets its own label and track name (see overlap_label()).
+OVERLAP_CHOICES = [0, 1, 2, 3, 4, 5, 6]
 DEFAULT_OVERLAPS = [2]
+
+
+def overlap_label(n: int) -> str:
+    """Checkbox text for an overlap size."""
+    if n == 0:
+        return "0 frames — edit points only"
+    return f"{n} frame" + ("s" if n > 1 else "")
 
 # Maps fps label → (numerator, denominator) for the actual frame rate
 FPS_RATES: dict[str, tuple[int, int]] = {

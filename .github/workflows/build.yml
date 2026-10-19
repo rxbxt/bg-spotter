@@ -1,0 +1,88 @@
+name: build
+
+# Produces signed-off artifacts for every platform we support, on GitHub's
+# machines — including the Windows build, which cannot be cross-compiled from
+# macOS. Artifacts are downloadable from the run's "Artifacts" section.
+#
+# Note: GitHub-hosted macOS runners consume minutes at 10x the rate of Linux
+# ones, so this is cheap on a public repo and pricier on a private one.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "build_app.sh"
+      - "build_windows.ps1"
+      - "make_dmg.sh"
+      - "pyproject.toml"
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        python-version: ["3.12"]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and package
+        shell: pwsh
+        run: .\build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bg-spotter-windows
+          path: dist/*.zip
+
+  macos-applesilicon:
+    needs: test
+    runs-on: macos-latest        # arm64 runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - run: ./build_app.sh
+      - run: ./make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bg-spotter-macos-arm64
+          path: dist/*.dmg
+
+  macos-intel:
+    needs: test
+    runs-on: macos-13            # Intel runner; PySide6 ships universal2 for macOS 13+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - run: ./build_app.sh
+      - run: ./make_dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bg-spotter-macos-intel
+          path: dist/*.dmg

@@ -7,18 +7,18 @@ No review step; detected-cut count and written tracks are reported inline.
 from __future__ import annotations
 
 import os
-import subprocess
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFont
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame,
-    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
+from bg_spotter import platform_utils
 from bg_spotter.config import (
-    APP_NAME, COMPANY_NAME, OVERLAP_CHOICES, DEFAULT_OVERLAPS,
+    APP_NAME, COMPANY_NAME, OVERLAP_CHOICES, DEFAULT_OVERLAPS, overlap_label,
     SUPPORTED_VIDEO_EXTS, FPS_RATES,
 )
 from bg_spotter.pipeline.runner import (
@@ -81,12 +81,7 @@ QFrame#dropzone[dragOver="true"] {{ border-color: {RED}; }}
 
 
 def _log_file_path() -> str:
-    base = os.path.expanduser("~/Library/Logs/BG Spotter")
-    try:
-        os.makedirs(base, exist_ok=True)
-    except OSError:
-        base = os.path.expanduser("~")
-    return os.path.join(base, "bgspotter.log")
+    return os.path.join(platform_utils.log_dir(), "bgspotter.log")
 
 
 def _log_exception(context: str) -> None:
@@ -225,18 +220,22 @@ class MainWindow(QMainWindow):
 
         # ---- Overlap selection ------------------------------------------
         card_overlaps = self._card("OVERLAP SIZES  ·  each adds an A / B track pair")
-        grid = QHBoxLayout()
-        grid.setSpacing(18)
+        # Grid rather than a single row: seven options, one of them with a long
+        # explanatory label, must not squeeze each other at the minimum width.
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(18)
+        grid.setVerticalSpacing(8)
         self._overlap_checks: dict[int, QCheckBox] = {}
-        for n in OVERLAP_CHOICES:
-            cb = QCheckBox(f"{n} frame" + ("s" if n > 1 else ""))
+        for i, n in enumerate(OVERLAP_CHOICES):
+            cb = QCheckBox(overlap_label(n))
             cb.setChecked(n in DEFAULT_OVERLAPS)
-            grid.addWidget(cb)
+            grid.addWidget(cb, i // 4, i % 4)
             self._overlap_checks[n] = cb
-        grid.addStretch()
+        grid.setColumnStretch(4, 1)
         card_overlaps.layout().addLayout(grid)
         hint = QLabel("Overlap is centred on each hard cut — adjacent A/B clips "
-                      "share N frames of handle. Pick any combination.")
+                      "share N frames of handle. Pick any combination.\n"
+                      "0 frames adds no handle: clips meet exactly at each edit point.")
         hint.setObjectName("status")
         hint.setWordWrap(True)
         card_overlaps.layout().addWidget(hint)
@@ -499,9 +498,7 @@ class MainWindow(QMainWindow):
         self._reveal_btn.show()
 
     def _reveal_in_finder(self) -> None:
-        path = getattr(self, "_reveal_path", "")
-        if path and os.path.exists(path):
-            subprocess.Popen(["open", "-R", os.path.abspath(path)])
+        platform_utils.reveal_in_file_manager(getattr(self, "_reveal_path", ""))
 
     def _reset_action(self) -> None:
         self._go_btn.setEnabled(True)

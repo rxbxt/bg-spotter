@@ -1,5 +1,7 @@
 """PySceneDetect-based cut and dissolve detection."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -23,6 +25,30 @@ class Edit:
     thumbnail_path: str | None = field(default=None, repr=False)
 
 
+def _as_frames(value, fps: float) -> int:
+    """Normalise scenedetect position values across library versions.
+
+    scenedetect 0.7 hands back ``FrameTimecode`` (``.frame_num``, or the
+    deprecated ``.get_frames()``); 0.6 passes plain **seconds** as a float/int —
+    notably in the progress callback. The Intel/Python 3.9 build resolves to
+    0.6.x because 0.7 requires Python >= 3.10, so shipped builds hit both shapes.
+    Calling ``.get_frames()`` unconditionally raised "'int' object has no
+    attribute 'get_frames'" and failed the export on that build.
+    """
+    frame_num = getattr(value, "frame_num", None)
+    if frame_num is not None:
+        return int(frame_num)
+
+    getter = getattr(value, "get_frames", None)
+    if callable(getter):
+        return int(getter())
+
+    try:
+        return int(round(float(value) * fps))
+    except (TypeError, ValueError):
+        return 0
+
+
 def detect_cuts(
     video_path: str,
     threshold: float = CONTENT_DETECTOR_THRESHOLD,
@@ -40,13 +66,13 @@ def detect_cuts(
     manager.add_detector(ContentDetector(threshold=threshold))
     manager.add_detector(AdaptiveDetector())
 
+    fps = float(getattr(video, "frame_rate", 0.0) or 0.0)
+
     if on_progress:
-        # In scenedetect 0.7 the callback signature is (frame: np.ndarray, timecode: FrameTimecode).
-        # video.duration is a FrameTimecode; .get_frames() gives the integer frame count.
-        total_frames = video.duration.get_frames() if video.duration else 0
+        total_frames = _as_frames(video.duration, fps) if video.duration else 0
 
         def _cb(frame, timecode):
-            on_progress(timecode.get_frames(), total_frames)
+            on_progress(_as_frames(timecode, fps), total_frames)
 
         manager.detect_scenes(video, callback=_cb)
     else:
@@ -64,8 +90,8 @@ def detect_cuts(
         prev_end = scene_list[i - 1][1]   # FrameTimecode of previous scene end
         curr_start = start_tc              # FrameTimecode of current scene start
 
-        prev_end_frame = prev_end.get_frames()
-        curr_start_frame = curr_start.get_frames()
+        prev_end_frame = _as_frames(prev_end, fps)
+        curr_start_frame = _as_frames(curr_start, fps)
 
         # PySceneDetect reports dissolves as scenes that span the transition.
         # A dissolve is indicated when consecutive scenes overlap in frame count

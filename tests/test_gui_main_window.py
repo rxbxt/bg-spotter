@@ -138,3 +138,59 @@ def test_fields_stay_readable_after_repeated_runs(qapp, tiny_video, tmp_path):
     for name in ("_out_edit", "_tc_edit", "_fps_combo"):
         h = getattr(w, name).height()
         assert h >= 22, f"{name} collapsed to {h}px - text would be unreadable"
+
+
+def test_zero_frame_option_offered_with_explanatory_label(qapp):
+    """0 frames must be selectable and self-explanatory in the UI."""
+    from bg_spotter.config import OVERLAP_CHOICES
+
+    w = MainWindow()
+    assert 0 in OVERLAP_CHOICES
+    assert 0 in w._overlap_checks, "no checkbox for edit-points-only (0 frames)"
+    text = w._overlap_checks[0].text().lower()
+    assert "0 frames" in text and "edit point" in text
+
+    # Every offered size gets a checkbox, and none of them share an object.
+    assert set(w._overlap_checks) == set(OVERLAP_CHOICES)
+    widgets = [cb for cb in w._overlap_checks.values()]
+    assert len({id(cb) for cb in widgets}) == len(widgets)
+
+
+def test_zero_frame_export_runs_end_to_end(qapp, tiny_video, tmp_path):
+    """The GUI must honour a 0-frame selection, not silently fall back.
+
+    Mirrors real usage: pick the overlaps first, then let the window name the
+    file (toggling a checkbox rewrites the suggested path, so a path set before
+    the toggles gets replaced).
+    """
+    import shutil
+
+    video = tmp_path / os.path.basename(tiny_video)
+    shutil.copyfile(tiny_video, video)      # keep artifacts out of the repo
+
+    w = MainWindow()
+    w._video_path = str(video)
+    for n, cb in w._overlap_checks.items():
+        cb.setChecked(n == 0)
+
+    out = w._out_edit.text().strip()
+    assert out.lower().endswith(".aaf"), "auto-naming produced no path"
+    assert "0" in os.path.basename(out), (
+        f"output name does not reflect the 0-frame selection: {out!r}")
+
+    w._on_go()
+    deadline = time.time() + 240
+    while time.time() < deadline:
+        qapp.processEvents()
+        if not w._worker.isRunning():
+            break
+        time.sleep(0.1)
+    qapp.processEvents()
+
+    assert "Failed" not in w._status.text(), w._status.text()
+    aaf2 = pytest.importorskip("aaf2")
+    with aaf2.open(out) as f:
+        comp = [m for m in f.content.mobs
+                if type(m).__name__ == "CompositionMob"][0]
+        names = [s.name for s in comp.slots]
+    assert names == ["Edit Points Only A", "Edit Points Only B"], names
