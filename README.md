@@ -8,7 +8,9 @@ overlap by exactly N frames at every hard cut; **0 frames** adds no handle, so
 clips meet exactly at each edit ("**Edit Points Only A/B**"). Silence regions
 between clips import into Pro Tools as true digital silence — no cleanup needed.
 
-Runs on Apple Silicon Macs, Intel Macs (macOS 13+) and Windows 10/11.
+Runs on Apple Silicon Macs and Intel Macs (macOS 13+).
+Windows 10/11 support **(soon)** — the build setup is in place, but a Windows
+release has not yet been built and verified.
 
 By **Akahon Audio LLC** · composerrob.com
 
@@ -61,18 +63,22 @@ DIST=dist-intel ./make_dmg.sh      # → dist-intel/BG-Spotter-<version>-x86_64.
 A single universal2 app is impossible: `opencv-python` has never published a
 universal2 wheel, so the two slices must ship as separate images.
 
-### Windows
+### Windows 10/11 (soon)
 
-On a Windows 10/11 (64-bit) machine — creates its own venv, runs the tests, then
-zips the result:
+A Windows release is not available yet. The build script is ready to run on a
+Windows 10/11 (64-bit) machine: it creates its own venv, runs the tests, then
+packages the executable into a zip. The resulting app still needs a Windows
+launch and export check before release:
 
 ```
 powershell -ExecutionPolicy Bypass -File .\build_windows.ps1
 # → dist\BG-Spotter-<version>-win64.zip
 ```
 
-No PC handy? The `build` GitHub Actions workflow runs the suite on Windows and
-macOS and uploads a Windows zip plus arm64 and Intel DMGs as artifacts.
+No PC handy? The `build` GitHub Actions workflow is configured to run the suite
+on Windows and macOS and upload a Windows zip plus arm64 and Intel DMGs as
+artifacts. A successful Windows build and a launch/export check are still
+needed to confirm release readiness.
 
 The built app can be smoke-tested headlessly:
 
@@ -90,7 +96,7 @@ will not run on the other, and PyInstaller cannot produce a combined binary:
 | --- | --- |
 | Apple Silicon Mac (M1–M4) | `dist/BG-Spotter-<version>-arm64.dmg` |
 | Intel Mac (macOS 13 Ventura or later) | `dist-intel/BG-Spotter-<version>-x86_64.dmg` |
-| Windows 10/11, 64-bit | `dist\BG-Spotter-<version>-win64.zip` |
+| Windows 10/11, 64-bit | Coming soon — no verified Windows release yet |
 
 Unsure which Mac they have? Click the Apple menu (top-left) → **About This
 Mac**: "Chip: Apple M…" is Apple Silicon; "Processor: Intel …" is Intel. Each
@@ -109,7 +115,7 @@ If you zip/dropbox the app, macOS tags it as quarantined — that's what
 triggers the prompt. Copying it locally (e.g. from a USB drive formatted
 Mac OS Extended) skips the prompt entirely.
 
-Windows builds are unsigned too: SmartScreen may show "Windows protected your
+When available, Windows builds will be unsigned too: SmartScreen may show "Windows protected your
 PC" on first run — **More info → Run anyway**, once per machine.
 
 For frictionless distribution later, an Apple Developer ID ($99/yr) enables:
@@ -133,7 +139,8 @@ xcrun notarytool submit BG Spotter.zip --apple-id you@example.com --password <ap
   explicit root/content layout handles, so the button starts the job instead of
   killing the process.
 - **0-frame overlap option** — spot edit points only (`Edit Points Only A/B`).
-- **Intel Mac and Windows builds.** All OS-specific behaviour moved into
+- **Intel Mac builds and Windows build preparation.** Windows release coming
+  soon; build and launch/export verification are still pending. All OS-specific behaviour moved into
   `platform_utils.py` (log directory, Reveal in Finder / Explorer), and
   `scenedetect`'s position values are normalised so its 0.6 API (what Python 3.9
   installs) works as well as 0.7.
