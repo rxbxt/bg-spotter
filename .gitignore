@@ -16,3 +16,8 @@ BG Spotter.spec
 
 # Written by build_windows.ps1 from pyproject.toml.
 version_info.txt
+
+# Local machine metadata, assistant settings, and private planning notes.
+.DS_Store
+.claude/
+PLAN.md
